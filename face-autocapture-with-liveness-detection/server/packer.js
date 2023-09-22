@@ -49,9 +49,9 @@ config.SUPPORTED_LANGUAGES.split(',').forEach(lang => {
 
 exports.pack = function pack() {
     debug('>> process.env.NODE_ENV = ', process.env.NODE_ENV, { mode: MODE }, { devtool: DEVTOOL });
-    // generate liveness high package
-    if (config.LIVENESS_MODE === 'LIVENESS_HIGH') {
-        livenessPackage('high');
+    // generate active liveness package
+    if (config.LIVENESS_MODE === 'LIVENESS_ACTIVE') {
+        livenessPackage('active');
     } else if (config.LIVENESS_MODE === 'LIVENESS_PASSIVE') {
         livenessPackage('passive');
     } else if (config.LIVENESS_MODE === 'LIVENESS_PASSIVE_VIDEO') {
@@ -81,6 +81,7 @@ function livenessPackage(liveness) {
                 filename: '[name].js',
                 hashFunction: 'sha256'
             },
+            target: ['web', 'es5'],
             module: {
                 rules: [
                     {
@@ -89,7 +90,7 @@ function livenessPackage(liveness) {
                         use: {
                             loader: 'babel-loader',
                             options: {
-                                presets: [['@babel/preset-env', { targets: 'ie >= 11' }]]
+                                presets: ['@babel/preset-env']
                             }
                         }
                     }
@@ -111,11 +112,7 @@ function livenessPackage(liveness) {
                 new HtmlReplaceWebpackPlugin(
                     [
                         {
-                            pattern: config.IDPROOFING ? /<li><a href=".\/high-liveness\/\?enableMatching=true">High liveness with matching<\/a><\/li>/ : '',
-                            replacement: ''
-                        },
-                        {
-                            pattern: config.IDPROOFING ? /<li><a href=".\/medium-liveness\/\?enableMatching=true">Medium liveness with matching<\/a><\/li>/ : '',
+                            pattern: config.IDPROOFING ? /<li><a href=".\/active-liveness\/\?enableMatching=true">Active liveness with matching<\/a><\/li>/ : '',
                             replacement: ''
                         },
                         {

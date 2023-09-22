@@ -117,9 +117,8 @@ exports.initLivenessSession = async function (basePath, sessionId = '', identity
 
 /**
  * retrieve the complete GIPS/IPV status
- * @param sessionId
- * @param maxAttempts
- * @param interval
+ * @param basePath
+ * @param identityId
  * @return {isLivenessSucceeded, message}
  */
 exports.getGipsStatus = async function (basePath, identityId) {
@@ -151,12 +150,15 @@ exports.getGipsStatus = async function (basePath, identityId) {
 
 /**
  * retrieve the liveness challenge result from backend (via polling)
+ * @param basePath
+ * @param enablePolling
  * @param sessionId
  * @param maxAttempts
  * @param interval
  * @return {isLivenessSucceeded, message}
  */
 exports.getLivenessChallengeResult = async function (basePath, enablePolling, sessionId, maxAttempts = 10, interval = 1000) {
+    console.log('getLivenessChallengeResult call : maxAttempts=' + maxAttempts + ', enablePolling=' + enablePolling);
     return new Promise((resolve, reject) => {
         const xhttp = new window.XMLHttpRequest();
         xhttp.open('GET', `${basePath}/liveness-challenge-result/${sessionId}/?polling=${enablePolling}`, true);
@@ -164,6 +166,8 @@ exports.getLivenessChallengeResult = async function (basePath, enablePolling, se
         xhttp.responseType = 'json';
         xhttp.onload = () => {
             if (xhttp.status) {
+                console.log('getLivenessChallengeResult status', xhttp.status);
+
                 if (xhttp.status === 200) {
                     resolve(xhttp.response);
                 } else if (maxAttempts) { // >> polling
@@ -191,6 +195,9 @@ exports.getLivenessChallengeResult = async function (basePath, enablePolling, se
 
 /**
  * send another image to match with video best image
+ * @param basePath
+ * @param sessionId
+ * @param bestImageId
  * @param selfieImage
  * @return {Promise<void>}
  */
@@ -206,13 +213,6 @@ exports.pushFaceAndDoMatch = async function (basePath, sessionId, bestImageId, s
                 matchingOKDescription.innerHTML = __('Matching succeeded <br> score: ') + matches.score;
             }
             document.querySelector('#step-selfie-ok').classList.remove('d-none');
-
-            const bestImgMatching = document.querySelector('#step-selfie-ok .best-image');
-            if (bestImgMatching) {
-                const faceImg = await this.getFaceImage(basePath, sessionId, bestImageId);
-                const bestImageURL = window.URL.createObjectURL(faceImg);
-                bestImgMatching.style.backgroundImage = `url(${bestImageURL})`;
-            }
         } else {
             document.querySelector('#step-selfie-ko').classList.remove('d-none');
             const matchingNOKDescription = document.querySelector('#step-selfie-ko .description');
@@ -235,6 +235,7 @@ exports.pushFaceAndDoMatch = async function (basePath, sessionId, bestImageId, s
 
 /**
  * associate a new face to session
+ * @param basePath
  * @param sessionId session id
  * @param imageFile face image
  * @param faceInfo face information
@@ -269,6 +270,7 @@ exports.createFace = async function (basePath, sessionId, imageFile, faceInfo = 
 
 /**
  * retrieve face for a given session
+ * @param basePath
  * @param sessionId
  * @param faceId
  */
@@ -296,6 +298,7 @@ exports.getFaceImage = async function (basePath, sessionId, faceId) {
 
 /**
  * get matches result for a given session and two faces
+ * @param basePath
  * @param sessionId
  * @param referenceFaceId
  * @param candidateFaceId
@@ -364,34 +367,38 @@ function getTimeLeftBeforeEndFreeze(timeLeft) {
         }
     }
     return { days, hours, minutes, seconds };
-};
+}
 
 // msg is following this regex : 'Please retry after ' + new Date(delay)
 // const delayDate = new Date('Mon Dec 14 2020 22:20:39 GMT+0000');
 exports.userBlockInterval = function (fpBlockDate) {
     document.querySelector('.retry-fp').classList.add('d-none');
-    const fpCountdown = setInterval( // update the UI each second to update the left time of blocking
-        function () {
-            const currentDate = new Date().getTime();
-            const timeLeft = fpBlockDate - currentDate; // difference between blocking time and now in miliseconds
+    let fpCountdown = null;
+    const updateBlockInterval = () => {
+        const currentDate = new Date().getTime();
+        const timeLeft = fpBlockDate - currentDate; // difference between blocking time and now in milliseconds
 
-            // when browser's javascript is not working, timeLeft can be < 0
-            if (timeLeft > 0) {
-                // retrieve days/hours/minutes/seconds left before end of freeze
-                const { days, hours, minutes, seconds } = getTimeLeftBeforeEndFreeze(timeLeft);
-
-                const timerLeft = days + hours + minutes + seconds;
+        // when browser's javascript is not working, timeLeft can be < 0
+        if (timeLeft > 0) {
+            // retrieve days/hours/minutes/seconds left before end of freeze
+            const { days, hours, minutes, seconds } = getTimeLeftBeforeEndFreeze(timeLeft);
+            const timerLeft = days + hours + minutes + seconds;
+            if (timerLeft) {
                 // update UX with the countdown
                 document.querySelector('.fp-countdown').innerHTML = timerLeft;
-            } else {
-                // stop internal and display retry button
-                clearInterval(fpCountdown);
-                document.querySelector('.fp-countdown').innerHTML = ''; // remove countdown since time is over
-                document.querySelector('.please-try-again-in').classList.add('d-none');
-                // display retry button
-                document.querySelector('.retry-fp').classList.remove('d-none');
+                return;
             }
-        }, 1000);
+        }
+        // stop internal and display retry button
+        clearInterval(fpCountdown);
+        document.querySelector('.fp-countdown').innerHTML = ''; // remove countdown since time is over
+        document.querySelector('.please-try-again-in').classList.add('d-none');
+        // display retry button
+        document.querySelector('.retry-fp').classList.remove('d-none');
+    };
+    updateBlockInterval();
+    // update the UI each second to update the left time of blocking
+    fpCountdown = setInterval(updateBlockInterval, 1000);
 };
 
 // Will be overridden after initializeNetworkCheck has been called
@@ -429,7 +436,7 @@ function onFirstConnectivityCheck(networkConnectivity, uploadThreshold) {
         weakNetworkCheckPage.querySelector(CLASS_SIGNAL_MIN_VALUE).innerHTML = uploadThreshold + ' kb/s';
         weakNetworkCheckPage.querySelector('.upload').classList.remove('d-none');
     }
-};
+}
 
 function doNetworkCheck(onNetworkCheckUpdate) {
     BioserverNetworkCheck.connectivityMeasure({
@@ -584,12 +591,24 @@ exports.initLivenessAnimationsPartFull = function () {
     });
 };
 
-function displayMsg(elementToDisplay, userInstructionMsgDisplayed, livenessMediumOrHigh = false) {
+exports.initLivenessPassiveVideoTutorial = function () {
+    document.querySelectorAll('.liveness-passive-video-tutorial').forEach((element) => {
+        lottie.loadAnimation({
+            container: element, // the dom element that will contain the animation
+            renderer: 'svg',
+            loop: true,
+            autoplay: true,
+            animationData: require('./animations/liveness-passive-video-tutorial.json') // the animation data
+        });
+    });
+};
+
+function displayMsg(elementToDisplay, userInstructionMsgDisplayed, livenessActive = false) {
     // hide all messages
     document.querySelectorAll(CLASS_VIDEO_OVERLAY).forEach((overlay) => overlay.classList.add(D_NONE_FADEOUT));
     elementToDisplay.classList.remove(D_NONE_FADEOUT);
-    // TODO why don't we execute this code for liveness high and medium ?
-    if (!livenessMediumOrHigh) {
+    // TODO why don't we execute this code for active liveness ?
+    if (!livenessActive) {
         userInstructionMsgDisplayed = window.setTimeout(() => {
             elementToDisplay.classList.add(D_NONE_FADEOUT);
             userInstructionMsgDisplayed = window.clearTimeout(userInstructionMsgDisplayed);
@@ -597,17 +616,17 @@ function displayMsg(elementToDisplay, userInstructionMsgDisplayed, livenessMediu
     }
 }
 
-exports.handlePositionInfo = function (positionInfo, userInstructionMsgDisplayed, livenessMediumOrHigh = false) {
+exports.handlePositionInfo = function (positionInfo, userInstructionMsgDisplayed, livenessActive = false) {
     const headStartPositionOutline = document.querySelector('#center-head-animation');
     const moveCloserMsg = document.querySelector('#move-closer-animation');
     const moveFurtherMsg = document.querySelector('#move-further-animation');
     const tooBrightMsg = document.querySelector('#darkness');
     const tooDarkMsg = document.querySelector('#brightness');
 
-    // do not show brightness information for high liveness and medium
-    if (livenessMediumOrHigh && (positionInfo === 'TRACKER_POSITION_INFO_MOVE_DARKER_AREA' ||
+    // do not show brightness information for active liveness
+    if (livenessActive && (positionInfo === 'TRACKER_POSITION_INFO_MOVE_DARKER_AREA' ||
       positionInfo === 'TRACKER_POSITION_INFO_MOVE_BRIGHTER_AREA')) {
-        displayMsg(headStartPositionOutline, userInstructionMsgDisplayed, livenessMediumOrHigh);
+        displayMsg(headStartPositionOutline, userInstructionMsgDisplayed, livenessActive);
     } else {
         switch (positionInfo) {
             case 'TRACKER_POSITION_INFO_MOVE_BACK_INTO_FRAME': // No head detected
@@ -619,22 +638,22 @@ exports.handlePositionInfo = function (positionInfo, userInstructionMsgDisplayed
             case 'TRACKER_POSITION_INFO_CENTER_TILT_RIGHT': // Tilt your head right
             case 'TRACKER_POSITION_INFO_CENTER_TILT_LEFT': // Tilt your head left
             case 'TRACKER_POSITION_INFO_STAND_STILL': // Stand still
-                displayMsg(headStartPositionOutline, userInstructionMsgDisplayed, livenessMediumOrHigh);
+                displayMsg(headStartPositionOutline, userInstructionMsgDisplayed, livenessActive);
                 break;
             case 'TRACKER_POSITION_INFO_CENTER_MOVE_BACKWARDS': // Move away from the camera
-                displayMsg(moveFurtherMsg, userInstructionMsgDisplayed, livenessMediumOrHigh);
+                displayMsg(moveFurtherMsg, userInstructionMsgDisplayed, livenessActive);
                 break;
             case 'TRACKER_POSITION_INFO_CENTER_MOVE_FORWARDS': // Move closer to the camera
-                displayMsg(moveCloserMsg, userInstructionMsgDisplayed, livenessMediumOrHigh);
+                displayMsg(moveCloserMsg, userInstructionMsgDisplayed, livenessActive);
                 break;
             case 'TRACKER_POSITION_INFO_MOVE_DARKER_AREA': // The place is too bright
-                displayMsg(tooBrightMsg, userInstructionMsgDisplayed, livenessMediumOrHigh);
+                displayMsg(tooBrightMsg, userInstructionMsgDisplayed, livenessActive);
                 break;
             case 'TRACKER_POSITION_INFO_MOVE_BRIGHTER_AREA': // The place is too dark
-                displayMsg(tooDarkMsg, userInstructionMsgDisplayed, livenessMediumOrHigh);
+                displayMsg(tooDarkMsg, userInstructionMsgDisplayed, livenessActive);
                 break;
             default:
-                displayMsg(headStartPositionOutline, userInstructionMsgDisplayed, livenessMediumOrHigh);
+                displayMsg(headStartPositionOutline, userInstructionMsgDisplayed, livenessActive);
                 break;
         }
     }
@@ -673,17 +692,12 @@ exports.stopVideoCaptureAndProcessResult = async function (session, settings, re
 
         document.querySelectorAll(`#step-liveness-ok button.${nextButton}`).forEach((step) => step.classList.remove('d-none'));
     } else if (msg && (msg.indexOf('Timeout') > -1 || msg.indexOf('failed') > -1)) {
-        if (!sessionStorage.getItem('livenessResult')) {
-            sessionStorage.setItem('livenessResult', '1');
-            document.querySelector('#step-liveness-timeout').classList.remove('d-none');
-            document.querySelector('#step-liveness-timeout .footer').classList.add('d-none');
-            setTimeout(() => {
-                document.querySelector('#step-liveness-timeout .footer').classList.remove('d-none');
-            }, 2000);
-        } else {
-            document.querySelector('#step-liveness-failed').classList.remove('d-none');
-            document.querySelector('#step-liveness-failed .footer').classList.add('d-none');
-        }
+        // We handle failed and timeout similarly, but one may use the id #step-liveness-failed if needed
+        document.querySelector('#step-liveness-timeout').classList.remove('d-none');
+        document.querySelector('#step-liveness-timeout .footer').classList.add('d-none');
+        setTimeout(() => {
+            document.querySelector('#step-liveness-timeout .footer').classList.remove('d-none');
+        }, 2000);
     } else {
         document.querySelector('#step-liveness-ko').classList.remove('d-none');
         if (msg) {
@@ -697,6 +711,7 @@ exports.stopVideoCaptureAndProcessResult = async function (session, settings, re
 
 exports.initComponents = function (session, settings, resetLivenessDesign) {
     settings.CLASS_VIDEO_OVERLAY = '#step-liveness .video-overlay';
+    settings.D_NONE = 'd-none';
     settings.D_NONE_FADEOUT = 'd-none-fadeout';
     settings.ID_CONNECTIVITY_CHECK = '#connectivity-check';
     settings.ID_STEP_LIVENESS = '#step-liveness';
@@ -715,6 +730,7 @@ exports.initComponents = function (session, settings, resetLivenessDesign) {
 
     session.bestImgElement = document.querySelector('#step-liveness-ok .best-image');
     session.videoOutput = document.querySelector('#user-video');
+    session.videoOutput.disablePictureInPicture = true;
 
     const ID_GET_IPV_STATUS_RESULT = '#get-ipv-status-result';
     const ID_BEST_IMAGE_IPV = '#best-image-ipv';
@@ -738,7 +754,7 @@ exports.initComponents = function (session, settings, resetLivenessDesign) {
         document.querySelector(ID_GET_IPV_STATUS_RESULT).innerHTML = '';
         const result = await this.getGipsStatus(settings.basePath, session.identityId);
         console.log('result IPV response' + result);
-        document.querySelector(ID_GET_IPV_STATUS_RESULT).innerHTML = JSON.stringify(result, null, 4);
+        document.querySelector(ID_GET_IPV_STATUS_RESULT).innerHTML = JSON.stringify(result, null, 2);
         document.querySelector(ID_GET_IPV_STATUS_RESULT).classList.remove('d-none');
     });
 
@@ -766,7 +782,6 @@ exports.initComponents = function (session, settings, resetLivenessDesign) {
     if (document.querySelector('#step-1')) {
         window.envBrowserOk && document.querySelector('#step-1').classList.remove('d-none');
     }
-    sessionStorage.removeItem('livenessResult');
     const selfieInput = document.querySelector('#selfieInput');
 
     document.querySelector('#takeMyPickture').addEventListener('click', () => {

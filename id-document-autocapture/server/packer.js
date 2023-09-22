@@ -19,7 +19,7 @@ limitations under the License.
  */
 const path = require('path');
 const config = require('./config');
-const logger = require('./config/demoLogConf').getLogger(__filename);
+const logger = require('./config/demoLogConf').getLogger();
 const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const I18nPlugin = require('@zainulbr/i18n-webpack-plugin');
@@ -46,7 +46,7 @@ exports.pack = function pack() {
         aggregateTimeout: 500, // allow few time to packer to aggregate changes during this time
         poll: 1000 // Check for changes every second
     };
-    logger.info('>> NODE_ENV : %s => %o', process.env.NODE_ENV, { mode, devtool, watch });
+    logger.info('>> NODE_ENV: %s => %o', process.env.NODE_ENV, { mode, devtool, watch });
 
     Object.keys(languages).forEach(language => {
         logger.info(`Generating ${language} package ...`);
@@ -62,7 +62,7 @@ exports.pack = function pack() {
             watch,
             watchOptions,
             // this will increase default maxSize from default one 244kB to 550kB because of gif animation files
-            performance: { maxEntrypointSize: 550 * 1024, maxAssetSize: 550 * 1024 },
+            performance: { maxEntrypointSize: 570 * 1024, maxAssetSize: 570 * 1024 },
             output: {
                 path: path.join(__dirname, '../front/doc-auth/' + language + '/js/'),
                 publicPath: 'js',

@@ -287,16 +287,16 @@ small ul {
     flex: 0 0 auto;
     padding: 20px;
 }
-.browsers, .os-list {
+.os-list {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
 }
-.browser, .os {
+.os {
     display: flex;
     flex: 1 1 100%;
 }
-.browser-img,.os-img{
+.os-img{
     background-size: auto 100px;
     background-repeat: no-repeat;
     width: 100px;
@@ -304,11 +304,12 @@ small ul {
     display: inline-block;
     margin: 5px;
 }
-.browser-img {
-    background-image: url(../img/browsers.png) ;
+.browser-logo {
+    width: 100px;
+    margin-right: 10px;
 }
 .os-img {
-    background-image: url(../img/os.png) ;
+    background-image: url(../img/os.png);
 }
 .browser > span,.os > span  {
     align-self: center;
@@ -333,6 +334,10 @@ small ul {
 .browser #samsung-browser {
     background-position: -600px 0;
 }
+.browser #huaweibrowser {
+    background-position: -600px 0;
+}
+
 .os #windows {
     background-position: 0 0;
 }
@@ -445,7 +450,6 @@ video {background-color: black}
 #step-doc-auth .doc-auth-mask {
     position: absolute;
     top: 0 ;
-    z-index: 999;
     justify-content: center;
     align-items: center;
 }
@@ -455,7 +459,6 @@ video {background-color: black}
 }
 
 #step-doc-auth .doc-auth-mask-border {
-    flex-direction: column;
     justify-content: center;
     align-items: stretch;
     border: 5px solid white;
@@ -504,6 +507,23 @@ video {background-color: black}
     height: calc(var(--mask-margin) * var(--mask-h-ratio));
     max-height: calc(var(--mask-margin) * 100%);
 }
+
+#mrz-overlay {
+    background: url('../img/mrz.svg') no-repeat left 90%;
+    background-size: auto;
+    background-size: contain;
+    width: 95%;
+}
+
+#portrait-overlay {
+    background: url('../img/portrait.svg') no-repeat;
+    position: absolute;
+    width: 90%;
+    height: 40%;
+    background-size: contain;
+    margin-top: 15%;
+}
+
 #step-doc-auth .video-msg {
     max-width: calc(var(--mask-margin) * var(--mask-w-ratio));
 }
@@ -722,7 +742,7 @@ video {background-color: black}
     background: url('../img/lock.png') center no-repeat;
     background-size: 40%;
 }
-.loader-animation > div{
+.loader-animation > div {
     width: 100%;
     height: 100%;
     border: 5px solid #cccccc;
@@ -733,6 +753,36 @@ video {background-color: black}
     left: 0;
     animation: loader-rotate 1s linear infinite;
 }
+.loader-infinite > div {
+    border-color: #D1C4E3 !important;
+    border-top-color: #430099 !important;
+}
+.loader-progress {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    color: #430099;
+}
+#progress-spinner {
+    border-radius: 50%;
+    height: 80px;
+    width: 80px;
+}
+#middle-circle {
+    position: absolute;
+    border-radius: 50%;
+    height: 70px;
+    width: 70px;
+    background-color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: larger;
+    font-weight: bold;
+}
+
 @keyframes loader-rotate {
     0% {
         transform: rotate(0);
@@ -842,7 +892,7 @@ video {background-color: black}
 }
 
 .best-image-wrapper {
-    margin-bottom: 0px;
+    margin-bottom: 0;
 }
 
 .front-result-block {
@@ -888,4 +938,82 @@ video {background-color: black}
 
 #retry {
     margin-top: 1rem;
+}
+
+/** Document status management **/
+
+.status-title {
+    box-sizing: border-box;
+    border-radius: 10px;
+    padding: 10px 10px 10px 0;
+    display: flex;
+}
+
+.document-done {
+    background: rgba(66, 148, 0, 0.1);
+    color: #429400;
+}
+
+.document-failed, .document-error, .document-aborted {
+    background: rgba(208, 2, 27, 0.1);
+    color: #D0021B;
+}
+
+.document-timeout {
+    background: rgba(248, 171, 7, 0.1);
+    color: #F8AB07;
+}
+
+.status-result {
+    flex: 0 0 auto;
+    padding: 16px 0 0 0;
+}
+
+.status-result img {
+    width: 30px;
+    height: 30px;
+    vertical-align: middle;
+    text-align: center;
+    margin: 10px 10px 10px 15px;
+}
+
+.status-text {
+    font-style: normal;
+    font-size: 14px;
+    line-height: 22px;
+    font-weight: bold;
+    text-align: left;
+    padding: 0 5px 0 10px;
+    margin-bottom: auto;
+    margin-top: auto;
+}
+
+.status-text-details {
+    line-height: 1.38;
+    color: #545454;
+    font-weight: 500;
+    padding: 10px 0 0 0;
+    font-size: 15px;
+}
+/** end -- Document status management **/
+
+/** server overloaded **/
+
+.server-overloaded-title {
+    padding-top: 20px;
+    font-style: normal;
+    font-weight: bold;
+    font-size: 20px;
+    color: #4C4C4C;
+    text-align: center;
+    letter-spacing: normal;
+}
+.server-overloaded-description {
+    padding-top: 20px;
+    font-style: normal;
+    font-weight: normal;
+    font-size: 16px;
+    color: #656565;
+    letter-spacing: normal;
+    text-align: center;
 }

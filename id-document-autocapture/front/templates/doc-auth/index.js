@@ -31,10 +31,14 @@ const capturedDoc = $('#doc-captured');
 const capturedDocBorder = $('#doc-captured .doc-captured-border polygon');
 const blurryDocMsg = $('#blurry-doc-msg');
 const holdStraightDocMsg = $('#hold-straight-msg');
+const wrongDocOrientationMsg = $('#wrong-orientation-msg');
 const reflectionDocMsg = $('#doc-reflection-msg');
 const lowLightDocMsg = $('#doc-low-light-msg');
 const tooCloseDocMsg = $('#too-close-doc-msg');
 const tooFarDocMsg = $('#too-far-doc-msg');
+const uploadingCaptures = $('#uploading-doc-captures');
+const uploadingInfinite = $('#uploading-infinite');
+const uploadingProgress = $('#uploading-progress');
 const loadingResults = $('#loading-doc-results');
 const loadingInitialization = $('#loading-initialization');
 const videoScanOverlays = $$('#step-doc-auth .video-overlay');
@@ -88,6 +92,12 @@ const signalMinValueClass = '.signal-min-value';
 const networkSpeedString = '/network-speed';
 const networkLatencyString = '/network-latency';
 const dateDocSideAttribute = 'data-doc-side';
+
+// TODO read these values from css file
+const progressBarBackgroundColor = '#D1C4E3';
+const progressBarColor = '#430099';
+
+const conicGradientSupported = CSS.supports('background: conic-gradient(white, black)');
 
 stopCaptureButton.onclick = function () {
     if (!client) {
@@ -168,7 +178,7 @@ async function initDocCaptureClient(options = {}) {
             if (client) {
                 videoOutput.srcObject = null;
                 videoStream = null; // it will allow to reload the stream on next capture
-                client.stop();
+                client.disconnect();
             }
         },
         trackingFn: (trackingInfo) => {
@@ -178,7 +188,7 @@ async function initDocCaptureClient(options = {}) {
             console.log('got error', error);
             clearTimeout(countDownTimer);
             captureInProgress = false;
-            processCaptureResult(false, __('Sorry, there was an issue.'));
+            processCaptureResult(error, __('Sorry, there was an issue.'));
             if (client) {
                 videoOutput.srcObject = null;
                 videoStream = null; // it will allow to reload the stream on next capture
@@ -187,7 +197,12 @@ async function initDocCaptureClient(options = {}) {
         }
     };
     console.log('Init document capture client. Side is : ' + docSide);
-    client = await DocserverVideo.initDocCaptureClient(docCaptureOptions);
+    try {
+        client = await DocserverVideo.initDocCaptureClient(docCaptureOptions);
+    } catch (err) {
+        console.log('Init document capture client failed:', err);
+        displayTechnicalError();
+    }
 }
 async function retrieveUserCamera() {
     if (videoStream) {
@@ -199,15 +214,15 @@ async function retrieveUserCamera() {
         videoStream = await DocserverVideo.getDeviceStream();
         // display the video stream
         videoOutput.srcObject = videoStream;
-    } catch (e) {
+    } catch (err) {
         let msg = __('Failed to get camera device stream');
         let extendedMsg;
-        if (e.name && e.name.indexOf('NotAllowed') > -1) {
+        if (err && err.name && err.name.indexOf('NotAllowed') > -1) {
             msg = __('You denied camera permissions, either by accident or on purpose.');
             extendedMsg = __('In order to use this demo, you need to enable camera permissions in your browser settings or in your operating system settings.');
         }
-        if (e.name && e.name.indexOf('OverconstrainedError') > -1) {
-            extendedMsg = __('The selected camera doesn\'t support required resolution: ') + e.extendedInfo;
+        if (err && err.name && err.name.indexOf('OverconstrainedError') > -1) {
+            extendedMsg = __('The selected camera doesn\'t support required resolution: ') + err.extendedInfo;
         }
         processCaptureResult(false, msg, extendedMsg);
     }
@@ -305,11 +320,12 @@ function displayChangeSideUI(startDelay) {
     alignDocMsg.classList.add('video-overlay-flip'); // add background in order to better read the message
 
     countDownTimer = setTimeout(() => {
+        console.log('New side ready to capture');
         // Disable countdown
         clearTimeout(countDownTimer);
         // Display video message
         resetVideoMsgContent();
-        // alignDocMsg.querySelector(`.video-msg-${docSide.replace('_', '-')}`).classList.remove('d-none');
+        alignDocMsg.querySelector('.video-msg-back').classList.remove('d-none');
         alignDocMsg.classList.remove(dNoneFadeoutString);
         displayAbortButton();
     }, startDelay);
@@ -326,9 +342,6 @@ function removeAbortButton() {
 async function processStep(sourceStepId, targetStepId, displayWithDelay, docSide, startDelay = 3000) {
     // d-none all steps
     $$('.step').forEach(row => row.classList.add('d-none'));
-    if (sessionIdParam && targetStepId === '#step-country-selection') {
-        document.location.reload();
-    }
     if (targetStepId === connectivityCheckId) {
         if (connectivityOK) {
             targetStepId = stepDocAuthId; // connectivity check done & successful, move to the next step
@@ -396,9 +409,22 @@ async function processStep(sourceStepId, targetStepId, displayWithDelay, docSide
 
 function processCaptureResult(result, msg, extendedMsg) {
     $$('.step').forEach(step => step.classList.add('d-none'));
-    const captures = result && result.captures;
-    if (captures) {
+    $$('.status-result').forEach(status => status.classList.add('d-none'));
+    const error = !result || result.code;
+    if (!error) {
         console.log('Full Document ID: ' + result.id);
+        console.log('Full Document status: ', result.status);
+        if (result.status) {
+            if (docSide === 'INSIDE_PAGE') {
+                document.querySelector('#passport-status-' + result.status.toLowerCase()).classList.remove('d-none');
+            } else {
+                document.querySelector('#document-status-' + result.status.toLowerCase()).classList.remove('d-none');
+            }
+        }
+    }
+
+    const captures = !error && result.captures;
+    if (captures) {
         captures.forEach((capture, index) => {
             const stepId = processCaptureResultForSide(getDataToDisplay(capture, capture.side), capture.side.name);
             console.log('Capture ID: ' + capture.id);
@@ -410,6 +436,9 @@ function processCaptureResult(result, msg, extendedMsg) {
                 // Hide footer with buttons except for the last element
                 $(stepId + ' .footer').classList.add('d-none');
             } else {
+                // Display footer with buttons
+                $(stepId + ' .footer').classList.remove('d-none');
+                // Display the correct restart button depending of the workflow
                 selectRestartButton(stepId);
                 selectRetryButton(stepId);
                 // Last element: Add margin to allow scrolling to the bottom of the image (otherwise it overlaps with footer)
@@ -418,6 +447,7 @@ function processCaptureResult(result, msg, extendedMsg) {
         });
     } else {
         const stepId = processCaptureResultForSide(result, docSide, msg, extendedMsg);
+        $(stepId + ' .footer').classList.remove('d-none'); // d-none could have been added from previous capture
         selectRestartButton(stepId);
         selectRetryButton(stepId);
         addMarginForScrollingResult(stepId);
@@ -447,17 +477,20 @@ function selectRetryButton(stepId) {
 }
 
 function processCaptureResultForSide(result, side, msg, extendedMsg) {
+    const error = !result || result.code;
     console.log('Processing result for side: ' + side);
     resetDocAuthDesigns();
     const isPassport = side === 'INSIDE_PAGE';
-    const { done, ocr, pdf417, diagnostic, docImage, docCorners } = result;
+    const { status, ocr, pdf417, diagnostic, docImage, docCorners } = result;
     const stepId = isPassport ? '#step-scan-passport-result' : `#step-scan-doc-${side.toLowerCase()}-result`;
     const stepResult = $(stepId + ' .formatted-results');
     stepResult.innerHTML = '';
 
-    if (result) {
+    if (!error) {
         if (IDPROOFING) {
-            identityId = getCurrentDocumentRule().identityId;
+            if (!urlParams.get('identityId')) {
+                identityId = getCurrentDocumentRule().identityId;
+            }
             evidenceId = result.evidenceId;
             gipsImageBlock.classList.remove('d-none');
             gipsTransactionBlock.classList.remove('d-none');
@@ -472,27 +505,33 @@ function processCaptureResultForSide(result, side, msg, extendedMsg) {
             continueButtonUnknown.setAttribute('data-target', '#step-country-selection');
         }
 
-        if (!done) { // if status is not done => failed/timeout/aborted
-            if (diagnostic) { // we cannot have diagnostic when status is done
-                appendResultsTo(stepResult, 'Diagnostic', Object.keys(diagnostic).join(', '));
-            }
+        // Display document data
+        appendResultsTo(stepResult, 'Side status', status);
+        // Display image captured
+        docImageCase(docImage, stepResult, docCorners, side.toLowerCase());
+        // Display diagnostic
+        if (diagnostic) { // we cannot have diagnostic when status is done
+            appendResultsTo(stepResult, 'Diagnostic', Object.keys(diagnostic).join(', '));
+        }
+
+        if (status !== 'DONE' && !pdf417 && !ocr) { // if status is not done and we are not against results from pdf417 or mrz
             console.log('Timeout or no result found or partial result found against several rules', result);
-            const errorStepId = isPassport ? '#step-scan-passport-error' : `#step-scan-doc-${side.toLowerCase()}-error`;
+            const errorStepId = isPassport ? '#step-scan-passport-result' : `#step-scan-doc-${side.toLowerCase()}-result`;
             $(errorStepId).classList.remove('d-none');
             return errorStepId;
         } else if (pdf417 || ocr) {
             // calculate pdf417 / OCR / docImage results
             pdf417Case(pdf417, stepResult, stepId);
             const ocrFound = ocrCase(ocr, stepResult);
-            docImageCase(docImage, stepResult, docCorners, side.toLowerCase()); // docImage is behind ocr + pdf to have image at the bottom
             if (ocrFound) {
                 $(stepId).classList.remove('d-none');
             }
         } else if (docImage) { // we display captured doc for unknown doc - rectangle rule
-            docImageCase(docImage, stepResult, docCorners, side.toLowerCase());
             console.log('Unknown doc captured', result);
             $(stepId).classList.remove('d-none');
         }
+    } else if (result.code === 503) { // server overloaded
+        $('#step-server-overloaded').classList.remove('d-none');
     } else {
         $('#step-doc-auth-ko').classList.remove('d-none');
         if (msg) {
@@ -623,6 +662,12 @@ function initDocAuthDesign(docSide) {
     $('header').classList.add('d-none');
     $('main').classList.add('darker-bg');
     videoScanOverlays.forEach(overlay => overlay.classList.add(dNoneFadeoutString));
+    // display the mrz and portrait overlay only in case of passport capture
+    if (docSide.toLowerCase() === 'inside_page') {
+        document.querySelectorAll('.passport-overlay').forEach(msg => msg.classList.remove('d-none'));
+    } else {
+        document.querySelectorAll('.passport-overlay').forEach(msg => msg.classList.add('d-none'));
+    }
     docAuthMask.classList.remove(dNoneFadeoutString);
     resetVideoMsgContent();
     if (docSide !== 'back') { // do not display initialization loader after doc-flip for back side
@@ -672,27 +717,33 @@ function displayMsg(elementToDisplay, ttl = 2000) {
  * @param {boolean} position.tooClose
  * @param {boolean} position.tooFar
  * @param {boolean} position.goodPosition
+ * @param {boolean} position.noDocument
  * @param {boolean} position.bestImage
  * @param {Object} corners {w,h,x0,y0,x1,y1,x2,y2,x3,y3}
- * @param pending
+ * @param {boolean} pending
+ * @param {number} uploadProgress
  */
-function displayInstructionsToUser({ position, corners, pending }) {
-    // Event list: badFraming, glare, blur, tooClose, tooFar, holdStraight, lowlight
+function displayInstructionsToUser({ position, corners, pending, uploadProgress }) {
+    // Event list: badFraming, glare, blur, tooClose, tooFar, holdStraight, lowlight, noDocument
     if (position) { // << got some message related to document position
-        if (position.tooClose) {
+        if (position.noDocument) {
+            displayMsg(alignDocMsg);
+        } else if (position.wrongOrientation) {
+            displayMsg(wrongDocOrientationMsg);
+        } else if (position.tooClose) {
             displayMsg(tooCloseDocMsg);
         } else if (position.tooFar) {
             displayMsg(tooFarDocMsg);
-        } else if (position.pdf417) {
-            displayMsg(blurryDocMsg);
+        } else if (position.lowlight) {
+            displayMsg(lowLightDocMsg);
         } else if (position.holdStraight) {
             displayMsg(holdStraightDocMsg);
         } else if (position.badFraming) {
             displayMsg(alignDocMsg);
-        } else if (position.lowlight) {
-            displayMsg(lowLightDocMsg);
         } else if (position.reflection) {
             displayMsg(reflectionDocMsg);
+        } else if (position.pdf417) {
+            displayMsg(blurryDocMsg);
         } else if (position.blur) {
             displayMsg(blurryDocMsg);
         } else {
@@ -716,7 +767,28 @@ function displayInstructionsToUser({ position, corners, pending }) {
             userInstructionMsgDisplayed = window.clearTimeout(userInstructionMsgDisplayed);
         }
         $$('.step').forEach(step => step.classList.add('d-none'));
-        loadingResults.classList.remove('d-none');
+        uploadingCaptures.classList.remove('d-none');
+        // Display infinite loader first, hide progress bar since we don't know yet the percentage
+        uploadingInfinite.classList.remove('d-none');
+        uploadingProgress.classList.add('d-none');
+    }
+
+    if (uploadProgress) {
+        // Display progress bar with percentage only if conic-gradient is supported
+        if (conicGradientSupported) {
+            const progress = Number(uploadProgress * 100).toFixed(0);
+            // Now we have percentage, update progress value
+            setProgress(progress);
+            // Hide infinite loader, display progress bar
+            uploadingInfinite.classList.add('d-none');
+            uploadingProgress.classList.remove('d-none');
+        }
+
+        // When progress has reached 100%, we can switch to next screen
+        if (uploadProgress === 1) {
+            $$('.step').forEach(step => step.classList.add('d-none'));
+            loadingResults.classList.remove('d-none');
+        }
     }
 }
 
@@ -725,6 +797,14 @@ window.envBrowserOk && $('#step-country-selection').classList.remove('d-none');
  * check user connectivity (latency, download speed, upload speed)
  */
 window.onload = () => {
+    if (sessionIdParam) {
+        const sessionId = sessionIdParam;
+        initDocCaptureClient({ sessionId }); // since we doesn't reach the listener that call this init, we should call it here
+        // try to read the identityId from query param only if sessionId is also given as input
+        if (urlParams.get('identityId')) {
+            identityId = urlParams.get('identityId');
+        }
+    }
     if (typeof DocserverNetworkCheck !== 'undefined') {
         let displayGoodSignal = false;
 
@@ -1096,8 +1176,7 @@ function getDataToDisplay(documentResult, documentSide) {
         currentSideResult = documentResult;
     }
 
-    // DONE = everything was success, failed or timeout or any = failed
-    finalResult.done = (currentSideResult.status === 'DONE');
+    finalResult.status = currentSideResult.status;
     finalResult.diagnostic = currentSideResult.diagnostic;
     finalResult.docImage = currentSideResult.image;
     finalResult.docCorners = currentSideResult.corners;
@@ -1137,3 +1216,16 @@ $$('.restart-demo').forEach(btn => {
         videoStream = null;
     });
 });
+
+function setProgress(progress) {
+    $('#progress-spinner').style.background = `conic-gradient(${progressBarColor} ${progress}%,${progressBarBackgroundColor} ${progress}%)`;
+    $('#middle-circle').innerHTML = progress.toString() + '%';
+}
+
+function displayTechnicalError(extendedMsg) {
+    // TODO a retry button would be useful
+    $$('.step').forEach(step => step.classList.add('d-none'));
+    $('#step-doc-auth-technical-ko').classList.remove('d-none');
+    const small = $('#step-doc-auth-technical-ko small');
+    small.textContent = extendedMsg || '';
+}

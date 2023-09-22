@@ -331,21 +331,36 @@ small ul {
 .browsers-content {
     flex: 1;
     flex-wrap: wrap;
+    padding: 0;
 }
 .browsers-description {
     flex: 0 0 auto;
-    padding: 20px;
+    padding: 0;
 }
 .browsers, .os-list {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
+    flex-direction: column;
+    justify-content: left;
 }
-.browser, .os {
+
+.browsers > tr {
+    margin-top: 10px;
+}
+.browser-logo {
+    width: 80px;
+}
+.browser-desc {
+    padding-left: 5px;
+    display: flex;
+    justify-content: left;
+}
+
+.os {
     display: flex;
     flex: 1 1 100%;
 }
-.browser-img,.os-img{
+.os-img {
     background-size: auto 100px;
     background-repeat: no-repeat;
     width: 100px;
@@ -353,35 +368,14 @@ small ul {
     display: inline-block;
     margin: 5px;
 }
-.browser-img {
-    background-image: url(../img/browsers.png) ;
-}
+
 .os-img {
     background-image: url(../img/os.png) ;
 }
-.browser > span,.os > span  {
+.os > span {
     align-self: center;
 }
 
-.browser #chrome {
-    background-position: -100px 0;
-}
-.browser #firefox {
-    background-position: -200px 0;
-}
-.browser #edge {
-    background-position: -300px 0;
-}
-.browser #safari, .browsers #mobile-safari {
-    background-position: -400px 0;
-}
-.browser #opera {
-    background-position: -500px 0;
-}
-
-.browser #samsung-browser {
-    background-position: -600px 0;
-}
 .os #windows {
     background-position: 0 0;
 }
@@ -394,9 +388,10 @@ small ul {
 .os #mac-os {
     background-position: -300px 0;
 }
-.os #linux {
+.os #linux, #ubuntu {
     background-position: -400px 0;
 }
+
 .column-center {
     flex: 0 0 auto;
     display: flex;
@@ -468,7 +463,7 @@ video {background-color: black}
     background-position: center;
     background-repeat: no-repeat;
     background-size: contain;
-    transition: opacity 1s ease-in;
+    transition: opacity 500ms ease-in;
 }
 
 #step-liveness .d-none-fadeout {
@@ -682,19 +677,13 @@ video {background-color: black}
         transform: rotate(360deg);
     }
 }
-.best-image {
-    background-position: center center;
-    background-size: cover;
-    background-repeat: no-repeat;
-    width: 220px;
-    height: 250px;
-    justify-content: center;
-    position: relative;
+.best-image .pc {
+    align-self: flex-start;
 }
 .best-image img {
     position: absolute;
-    top: -37px;
-    right: 180px;
+    top: -5px;
+    left: -20px;
 }
 
 .video-block,
@@ -734,10 +723,6 @@ video {background-color: black}
     background-size: contain;
     transition: opacity 1s ease-in;
 
-}
-
-#best-image-ipv {
-    margin: 0px 0px 20px -112px; /* because best image is 224px */
 }
 
 .success-message-ipv {
@@ -783,10 +768,15 @@ video {background-color: black}
 #best-image-ipv {
     border: ridge;
     border-radius:10px;
+    max-width: 100%
 }
 
 .padT20 {
   padding-top: 20px;
+}
+
+.padb20 {
+    padding-bottom: 20px;
 }
 
 .light-image {
@@ -809,37 +799,36 @@ video {background-color: black}
 .video-tut .animation-tut { display:none!important;}
 
 .retry-fp {
-    margin-top: 0px !important;
+    margin-top: 30px !important;
 }
 
-.too-many-attempts {
+.too-many-attempts, .server-overloaded-title {
+    padding-top: 20px;
     font-family: unset;
     font-size: 32px;
     font-weight: bold;
     font-stretch: normal;
     font-style: normal;
-    line-height: 1.45;
     letter-spacing: normal;
     text-align: center;
     color: #101010;
 }
-.pc .too-many-attempts {
+.pc .too-many-attempts, .pc .server-overloaded-title {
     width: 1128px;
     font-size: 44px;
 }
-.for-security-reason {
+.for-security-reason, .server-overloaded-description {
     padding-top: 20px;
     font-family: unset;
     font-size: 18px;
     font-weight: 500;
     font-stretch: normal;
     font-style: normal;
-    line-height: 1.42;
     letter-spacing: normal;
     text-align: center;
     color: #4a4a4a;
 }
-.pc .for-security-reason {
+.pc .for-security-reason, .pc .server-overloaded-description {
     width: 772px;
     font-size: 24px;
 }
@@ -851,11 +840,14 @@ video {background-color: black}
     font-weight: bold;
     font-stretch: normal;
     font-style: normal;
-    line-height: 1.42;
     letter-spacing: normal;
     text-align: center;
     color: #4a4a4a;
 }
 .pc .please-try-again-in {
     font-size: 24px;
+}
+
+.fp-countdown {
+    font-family: monospace;
 }
