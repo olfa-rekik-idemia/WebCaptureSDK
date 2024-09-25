@@ -30,6 +30,8 @@ const alignDocMsg = $('#align-doc-msg');
 const capturedDoc = $('#doc-captured');
 const capturedDocBorder = $('#doc-captured .doc-captured-border polygon');
 const blurryDocMsg = $('#blurry-doc-msg');
+const mrzNotDetectedMsg = $('#mrz-not-detected-msg');
+const pdfNotDetectedMsg = $('#pdf-not-detected-msg');
 const holdStraightDocMsg = $('#hold-straight-msg');
 const wrongDocOrientationMsg = $('#wrong-orientation-msg');
 const reflectionDocMsg = $('#doc-reflection-msg');
@@ -222,7 +224,7 @@ async function retrieveUserCamera() {
             extendedMsg = __('In order to use this demo, you need to enable camera permissions in your browser settings or in your operating system settings.');
         }
         if (err && err.name && err.name.indexOf('OverconstrainedError') > -1) {
-            extendedMsg = __('The selected camera doesn\'t support required resolution: ') + err.extendedInfo;
+            extendedMsg = __('The selected camera doesn\'t support required resolution');
         }
         processCaptureResult(false, msg, extendedMsg);
     }
@@ -539,6 +541,22 @@ function processCaptureResultForSide(result, side, msg, extendedMsg) {
         }
         const small = $('#step-doc-auth-ko small');
         small.textContent = extendedMsg || '';
+
+        const btnRefresh = $('#step-doc-auth-ko .refresh');
+        const btnRestart = $('#step-doc-auth-ko .restart-demo');
+        const btnRetry = $('#retry');
+
+        // Special case for camera permission error
+        if (msg === __('You denied camera permissions, either by accident or on purpose.')) {
+            // Display refresh button instead of other buttons
+            btnRefresh && btnRefresh.classList.remove('d-none');
+            btnRestart && btnRestart.classList.add('d-none');
+            btnRetry && btnRetry.classList.add('d-none');
+        } else {
+            btnRefresh && btnRefresh.classList.add('d-none');
+            btnRestart && btnRestart.classList.remove('d-none');
+            btnRetry && btnRetry.classList.remove('d-none');
+        }
     }
     return stepId;
 }
@@ -700,7 +718,6 @@ function displayMsg(elementToDisplay, ttl = 2000) {
         elementToDisplay.classList.remove(dNoneFadeoutString);
         userInstructionMsgDisplayed = window.setTimeout(() => {
             videoScanOverlays.forEach(overlay => overlay.classList.add(dNoneFadeoutString));
-            alignDocMsg.classList.remove(dNoneFadeoutString);
             userInstructionMsgDisplayed = window.clearTimeout(userInstructionMsgDisplayed);
         }, ttl);
     }
@@ -743,7 +760,9 @@ function displayInstructionsToUser({ position, corners, pending, uploadProgress 
         } else if (position.reflection) {
             displayMsg(reflectionDocMsg);
         } else if (position.pdf417) {
-            displayMsg(blurryDocMsg);
+            displayMsg(pdfNotDetectedMsg);
+        } else if (position.mrzDecoding) {
+            displayMsg(mrzNotDetectedMsg);
         } else if (position.blur) {
             displayMsg(blurryDocMsg);
         } else {

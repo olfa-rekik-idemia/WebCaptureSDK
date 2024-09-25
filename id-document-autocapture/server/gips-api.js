@@ -21,10 +21,10 @@ const fetch = (...args) => import('node-fetch').then(({ default: _fetch }) => _f
 const FormData = require('form-data');
 const config = require('./config');
 const multipart = require('parse-multipart');
-const agent = require('./httpUtils').getAgent(config.GIPS_TLS_TRUSTSTORE_PATH, config.PROXY_URL);
+const agent = require('./httpUtils').getAgent(config.GIPS_TLS_TRUSTSTORE_PATH, config.PROXY_URL, config.NON_PROXY_HOSTS);
 const logger = require('./config/demoLogConf').getLogger();
 const context = [{
-    key: 'BUSINESS_ID',
+    key: 'CORRELATION_ID',
     value: 'LOA1P'
 }];
 const FRONT = 'FRONT';

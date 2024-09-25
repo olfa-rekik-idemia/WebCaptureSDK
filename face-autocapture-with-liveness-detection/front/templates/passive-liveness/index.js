@@ -16,7 +16,7 @@ limitations under the License.
 
 // this file is the main program that uses video server api for passive liveness
 
-/* global BASE_PATH, VIDEO_URL, VIDEO_BASE_PATH, DISABLE_CALLBACK, DEMO_HEALTH_PATH, IDPROOFING, BioserverVideo, BioserverNetworkCheck, BioserverVideoUI __ */
+/* global BASE_PATH, VIDEO_URL, VIDEO_BASE_PATH, DISABLE_CALLBACK, DEMO_HEALTH_PATH, IDPROOFING, BioserverVideo, BioserverNetworkCheck, BioserverVideoUI, __ */
 /* eslint-disable no-console */
 const commonutils = require('../../utils/commons');
 
@@ -60,8 +60,8 @@ commonutils.getCapabilities(settings.basePath, settings.healthPath).then(
             monitoring.forEach((element) => element.innerHTML = `${response.version}`);
         }
     }
-).catch(() => {
-    stopVideoCaptureAndProcessResult(false, 'Service unavailable');
+).catch(async () => {
+    await stopVideoCaptureAndProcessResult(false, 'Service unavailable');
 });
 function getFaceCaptureOptions() {
     let challengeInProgress = false;
@@ -89,22 +89,18 @@ function getFaceCaptureOptions() {
             console.log('Liveness Challenge done > requesting result ...');
             session.bestImageInfo = msgBody && msgBody.bestImageInfo; // store best image info to be used to center the image when it'll be displayed
             const result = await commonutils.getLivenessChallengeResult(settings.basePath, settings.enablePolling, session.sessionId)
-                .catch(() => stopVideoCaptureAndProcessResult(false, __('Failed to retrieve liveness results')));
-            session.loadingChallenge.classList.add(settings.D_NONE_FADEOUT);
+                .catch(async () => await stopVideoCaptureAndProcessResult(false, __('Failed to retrieve liveness results')));
             console.log('Liveness result ', result);
             // result.diagnostic not currently set as last param of stopVideoCaptureAndProcessResult(), as we need to know the impact of displaying it to the user
             if (result) {
-                stopVideoCaptureAndProcessResult(result.isLivenessSucceeded, result.message, result.bestImageId);
+                await stopVideoCaptureAndProcessResult(result.isLivenessSucceeded, result.message, result.bestImageId);
             }
-            if (session.client) {
-                session.videoOutput.srcObject = null;
-                session.client.disconnect();
-            }
+            await commonutils.abortCapture(session);
         },
         trackingFn: (trackingInfo) => {
             displayInstructionsToUser(trackingInfo, challengeInProgress);
         },
-        errorFn: (error) => {
+        errorFn: async (error) => {
             console.log('got error', error);
             challengeInProgress = false;
             if (error.code && error.code === 429) { //  enduser is blocked
@@ -125,12 +121,9 @@ function getFaceCaptureOptions() {
                 document.querySelector('.please-try-again-in').classList.remove(settings.D_NONE);
                 document.querySelector('#step-server-overloaded').classList.remove(settings.D_NONE);
             } else {
-                stopVideoCaptureAndProcessResult(false, __('Sorry, there was an issue.'));
+                await stopVideoCaptureAndProcessResult(false, __('Sorry, there was an issue.'));
             }
-            if (session.client) {
-                session.videoOutput.srcObject = null;
-                session.client.disconnect();
-            }
+            await commonutils.abortCapture(session);
         }
     };
 }
@@ -158,26 +151,26 @@ async function init(options = {}) {
     faceCaptureOptions.bioserverVideoUrl = settings.videoUrl;
     
     session.client = await BioserverVideo.initFaceCaptureClient(faceCaptureOptions);
+    // if user stops capture during await init client, then abort capture
+    if (session.toAbort) {
+        await commonutils.abortCapture(session);
+        return;
+    }
 
     if (session.client) {
         // get user camera video (front camera is default)
-        session.videoStream = await BioserverVideo.getMediaStream({ videoId: 'user-video', video: { deviceId: options.deviceId } })
-            .catch((e) => {
+        session.videoStream = await BioserverVideo.getMediaStream({ videoId: 'user-video' })
+            .catch(async (e) => {
                 let msg = __('Failed to get camera device stream');
                 let extendedMsg;
                 if (e.name && e.name.indexOf('NotAllowed') > -1) {
                     msg = __('You denied camera permissions, either by accident or on purpose.');
                     extendedMsg = __('In order to use this demo, you need to enable camera permissions in your browser settings or in your operating system settings. Please refresh the page to restart the demo.');
-
-                    // we hide the restart button so the user is not in a error loop. User should refresh his browser
-                    const restartButton = document.querySelector('#step-liveness-ko button');
-                    restartButton.classList.add(settings.D_NONE);
                 }
-                stopVideoCaptureAndProcessResult(false, msg, '', extendedMsg);
+                await stopVideoCaptureAndProcessResult(false, msg, '', extendedMsg);
             });
         if (!session.videoStream) {
-            session.videoOutput.srcObject = null;
-            session.client.disconnect();
+            await commonutils.abortCapture(session);
             return;
         }
         // display the video stream
@@ -192,9 +185,9 @@ document.querySelectorAll('*[data-target]')
     .forEach((btn) => btn.addEventListener('click', async () => {
         const targetStepId = btn.getAttribute('data-target');
         await processStep(targetStepId, btn.hasAttribute('data-delay') && (btn.getAttribute('data-delay') || 2000))
-            .catch(() => {
+            .catch(async () => {
                 if (!tooManyAttempts && !serverOverloaded) {
-                    stopVideoCaptureAndProcessResult(false);
+                    await stopVideoCaptureAndProcessResult(false);
                 }
             });
     }));
@@ -285,10 +278,7 @@ async function processLivenessStep() {
 
 document.querySelector('#step-liveness .tutorial').addEventListener('click', async () => {
     resetLivenessDesign();
-    if (session.client) {
-        session.videoOutput.srcObject = null;
-        session.client.disconnect();
-    }
+    await commonutils.abortCapture(session);
 });
 // gif animations are played only once, this will make them play again
 document.querySelectorAll('.reset-animations').forEach((btn) => {
@@ -312,9 +302,15 @@ function refreshImgAnimations() {
  * suspend video camera and return result
  */
 async function stopVideoCaptureAndProcessResult(success, msg, faceId = '', extendedMsg) {
-    await commonutils.stopVideoCaptureAndProcessResult(session, settings, resetLivenessDesign, success, msg, faceId, extendedMsg);
+    // Download the image first
+    let faceImg;
     if (faceId) {
-        const faceImg = await commonutils.getFaceImage(settings.basePath, session.sessionId, faceId);
+        faceImg = await commonutils.getFaceImage(settings.basePath, session.sessionId, faceId);
+    }
+    // Then reset the UI to show result
+    commonutils.stopVideoCaptureAndProcessResult(session, settings, resetLivenessDesign, success, msg, faceId, extendedMsg);
+    // Finally display the image
+    if (faceImg) {
         BioserverVideoUI.displayAndCenterBestImage(faceImg, session.bestImageInfo, BEST_IMG_ID);
     }
 }

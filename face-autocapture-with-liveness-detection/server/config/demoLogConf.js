@@ -1,5 +1,5 @@
 /*
-Copyright 2021 Idemia Identity & Security
+Copyright 2020 Idemia Identity & Security
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -40,19 +40,12 @@ const LOG_FILE_NAME_REGEX = (() => {
     return undefined;
 })();
 
-/** @type {InspectOptions} */
-const FORMAT_OPTIONS = {
-    depth: null, // it will print all the object tree in logs
-    maxArrayLength: 300 // default limit is 100, increased a bit to log properly all objects
-};
-
 const asyncLocalStorage = new AsyncLocalStorage();
 
-// The logger instance that will be exported
 const logger = createLogger(); // create only one instance shared between all files
 
 /**
- * Create an instance of logger object
+ * Create one instance of logger object
  * @returns {winston.Logger}
  */
 function createLogger() {
@@ -90,17 +83,16 @@ function createLogger() {
     });
     if (config.LOG_APPENDER !== 'console') {
         logger.add(new winston.transports.File({
-            filename: `${config.LOG_FILE_PATH}/docserver-demo-error.log`,
+            filename: `${config.LOG_FILE_PATH}/bioserver-demo-error.log`,
             level: 'error'
         }));
-        logger.add(new winston.transports.File({ filename: config.LOG_FILE_PATH + '/docserver-demo-technical.log' }));
+        logger.add(new winston.transports.File({ filename: config.LOG_FILE_PATH + '/bioserver-demo-technical.log' }));
     } else {
         logger.add(new winston.transports.Console());
     }
-
     /**
      * Update the current context of this logger
-     * @param {object?} context contains the tenantId and sessionId to store
+     * @param {object} context contains the tenantId and sessionId to store
      */
     logger.updateContext = function (context) {
         const store = asyncLocalStorage.getStore();
@@ -110,28 +102,26 @@ function createLogger() {
         }
         if (context) {
             // Check possible sessionId / tenantId values (null / undefined ignored, other values allowed, included empty string)
-            if (context.sessionId != null || context.id != null) {
-                store.sessionId = context.sessionId || context.id || '';
+            if (context.sessionId != null || context.id != null || context.bioSessionId != null) {
+                store.sessionId = context.sessionId || context.id || context?.bioSessionId || '';
             }
-            if (context.tenantId != null || context.clientId != null) {
-                store.tenantId = context.tenantId || context.clientId || '';
+            if (context.tenantId != null || context.clientId != null || context.tenantInfo?.clientId != null) {
+                store.tenantId = context.tenantId || context.clientId || context.tenantInfo?.clientId || '';
             }
         }
     };
-
     // Override log methods ('debug', 'info'...) to use util.format to have similar behaviour as console.log or debug lib
     Object.keys(logger.levels).forEach(level => {
         const logMethod = logger[level];
         logger[level] = function (...args) {
-            logMethod(util.formatWithOptions(FORMAT_OPTIONS, ...args));
+            logMethod(util.format(...args));
         };
     });
-
     // Override 'log' as well
     const _log = logger.log;
     logger.log = function (level, ...args) {
         // Need to attach the logger to 'this' otherwise an error is thrown
-        _log.call(logger, level, util.formatWithOptions(FORMAT_OPTIONS, ...args));
+        _log.call(logger, level, util.format(...args));
     };
     return logger;
 }
@@ -148,11 +138,11 @@ function getFileName() {
     /** Example of stack with different samples of files & functions names
      at ...
      at DerivedLogger.logger.<computed> [as info] (/home/r….../winston/create-logger.js:81:14), // << we must find this line index in stack
-     at functionName (/home/..../FileName.js:131:36) // << sample 1
-     at new FunctionName (/home/..../FileName.js:131:36) // << sample 2
-     at ObjectName.functionName (/home/..../FileName.js:131:36) // << sample 3
-     at ObjectName.<anonymous> (/home/..../FileName.js:131:36) // << sample 4
-     at /home/..../FileName.js:131:36 // << sample 5
+     at functionName (/home/rch/..../FileName.js:131:36) // << sample 1
+     at new FunctionName (/home/rch/..../FileName.js:131:36) // << sample 2
+     at ObjectName.functionName (/home/rch/..../FileName.js:131:36) // << sample 3
+     at ObjectName.<anonymous> (/home/rch/..../FileName.js:131:36) // << sample 4
+     at /home/rch/..../FileName.js:131:36 // << sample 5
      */
     let i = callersStack.findIndex(v => v.indexOf(lastLineBeforeCallerName) > -1);
     if (i < 0) {
